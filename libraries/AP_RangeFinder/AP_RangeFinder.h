@@ -103,6 +103,7 @@ public:
         USD1_CAN = 33,
         Benewake_CAN = 34,
         TeraRanger_Serial = 35,
+        VL53L4X = 36,
         SIM = 100,
     };
 
