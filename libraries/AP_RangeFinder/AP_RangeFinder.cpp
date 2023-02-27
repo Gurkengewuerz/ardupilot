@@ -436,15 +436,37 @@ void RangeFinder::detect_instance(uint8_t instance, uint8_t& serial_instance)
 #endif
             }
         break;
-    case Type::VL53L4X:
+    case Type::VL53L4X: {
 #if AP_RANGEFINDER_VL53L4X_ENABLED
-        FOREACH_I2C(i) {
-            if (_add_backend(AP_RangeFinder_VL53L4X::detect(state[instance], params[instance], hal.i2c_mgr->get_device(i, params[instance].address)), instance)) {
-                break;
+        uint8_t vl53l4x_count = 0; // how many vl53l4x are generally configured
+        uint8_t vl53l4x_with_pin = 0; // how many vl53l4x have a stop pin set
+        uint8_t vl53l4x_nth = 0; // which position is THIS current sensor starting at 0...1...2
+        for (uint8_t other_instance = 0; other_instance < RANGEFINDER_MAX_INSTANCES; other_instance++) {
+            if ((Type)params[other_instance].type.get() != Type::VL53L4X) {
+                continue;
+            }
+            vl53l4x_count++;
+            if (other_instance < instance) {
+                vl53l4x_nth++;
+            }
+            if (params[other_instance].stop_pin > 0) {
+                vl53l4x_with_pin++;
+            }
+        }
+        // vl53l4x support dynamic i2c addresses but because all vl53l4x starts with the same default address we must check a missconfiguration
+        // if only one vl53l4x is configured we don't need a dynamic address otherwise all vl53l4x must have the stop pin set (XSHUT)
+        if (vl53l4x_count == 1 || vl53l4x_count == vl53l4x_with_pin) {
+            // vl53l4x_count == 1 && vl53l4x_with_pin == 0 is valid if no XSHUT is connected to a single sensor
+            int8_t instance_number = vl53l4x_count == 1 && vl53l4x_with_pin == 0 ? -1 : vl53l4x_nth;
+            FOREACH_I2C(i) {
+                if (_add_backend(AP_RangeFinder_VL53L4X::detect(state[instance], params[instance], hal.i2c_mgr->get_device(i, params[instance].address), instance_number), instance)) {
+                    break;
+                }
             }
         }
 #endif
         break;
+    }
     case Type::BenewakeTFminiPlus: {
 #if AP_RANGEFINDER_BENEWAKE_TFMINIPLUS_ENABLED
         uint8_t addr = TFMINIPLUS_ADDR_DEFAULT;

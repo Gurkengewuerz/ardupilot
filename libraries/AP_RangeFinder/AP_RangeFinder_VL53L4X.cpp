@@ -132,7 +132,7 @@ AP_RangeFinder_VL53L4X::AP_RangeFinder_VL53L4X(RangeFinder::RangeFinder_State &_
 
 
 // detect tests if a VL53L4X is present and returns the sensor instance
-AP_RangeFinder_Backend *AP_RangeFinder_VL53L4X::detect(RangeFinder::RangeFinder_State &_state, AP_RangeFinder_Params &_params, AP_HAL::OwnPtr<AP_HAL::I2CDevice> dev)
+AP_RangeFinder_Backend *AP_RangeFinder_VL53L4X::detect(RangeFinder::RangeFinder_State &_state, AP_RangeFinder_Params &_params, AP_HAL::OwnPtr<AP_HAL::I2CDevice> dev, int8_t instance_number)
 {
     if (!dev) {
         return nullptr;
@@ -147,7 +147,15 @@ AP_RangeFinder_Backend *AP_RangeFinder_VL53L4X::detect(RangeFinder::RangeFinder_
 
     sensor->dev->get_semaphore()->take_blocking();
 
-    if (!sensor->check_id() || !sensor->init()) {
+    uint8_t default_gpio_state = 0;
+    if (instance_number >= 0) {
+        hal.gpio->pinMode(_params.stop_pin, HAL_GPIO_OUTPUT);
+        default_gpio_state = hal.gpio->read(_params.stop_pin);
+        hal.gpio->write(_params.stop_pin, 1);
+    }
+
+    if (!sensor->check_id() || !sensor->init(instance_number)) {
+        hal.gpio->write(_params.stop_pin, default_gpio_state);
         sensor->dev->get_semaphore()->give();
         delete sensor;
         return nullptr;
@@ -158,7 +166,7 @@ AP_RangeFinder_Backend *AP_RangeFinder_VL53L4X::detect(RangeFinder::RangeFinder_
 }
 
 // init writes the default configration, calibrate the sensor and starts the measurements
-bool AP_RangeFinder_VL53L4X::init()
+bool AP_RangeFinder_VL53L4X::init(int8_t instance_number)
 {
     // we need to do resets and delays in order to configure the sensor, don't do this if we are trying to fast boot
     if (hal.util->was_watchdog_armed()) {
@@ -200,6 +208,10 @@ bool AP_RangeFinder_VL53L4X::init()
 
     // start measurements regular
     if (!set_inter_measurement(MEASUREMENT_TIME_MS) || !set_timing_budget(50) || !start_continuous()) {
+        return false;
+    }
+
+    if (instance_number >= 0 && !set_address(0x70 + instance_number)) {
         return false;
     }
 
@@ -278,7 +290,7 @@ bool AP_RangeFinder_VL53L4X::set_timing_budget(uint32_t budget_ms)
     }
 
     uint32_t timing_budget_us = budget_ms * 1000;
-    uint32_t macro_period_us = calcMacroPeriod(osc_freq);
+    uint32_t macro_period_us = calc_macro_period(osc_freq);
 
     timing_budget_us -= 4300;
     timing_budget_us /= 2;
@@ -384,7 +396,18 @@ bool AP_RangeFinder_VL53L4X::get_reading(uint16_t &reading_mm)
     return true;
 }
 
-uint32_t AP_RangeFinder_VL53L4X::calcMacroPeriod(uint16_t osc_freq) const
+bool AP_RangeFinder_VL53L4X::set_address(uint8_t new_address)
+{
+    if (!write_register(I2C_SLAVE_DEVICE_ADDRESS, new_address)) {
+        return false;
+    }
+
+    dev->set_address(new_address);
+
+    return true;
+}
+
+uint32_t AP_RangeFinder_VL53L4X::calc_macro_period(uint16_t osc_freq) const
 {
     uint32_t pll_period_us = ((uint32_t)0x40000000) / osc_freq;
     uint32_t macro_period_us = ((uint32_t)2304 )* pll_period_us;

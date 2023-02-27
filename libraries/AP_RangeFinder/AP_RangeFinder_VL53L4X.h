@@ -16,7 +16,7 @@ class AP_RangeFinder_VL53L4X : public AP_RangeFinder_Backend
 
 public:
     // static detection function
-    static AP_RangeFinder_Backend *detect(RangeFinder::RangeFinder_State &_state, AP_RangeFinder_Params &_params, AP_HAL::OwnPtr<AP_HAL::I2CDevice> _dev);
+    static AP_RangeFinder_Backend *detect(RangeFinder::RangeFinder_State &_state, AP_RangeFinder_Params &_params, AP_HAL::OwnPtr<AP_HAL::I2CDevice> _dev, int8_t instance_number);
 
     // update state
     void update(void) override;
@@ -95,7 +95,7 @@ private:
     // constructor
     AP_RangeFinder_VL53L4X(RangeFinder::RangeFinder_State &_state, AP_RangeFinder_Params &_params, AP_HAL::OwnPtr<AP_HAL::I2CDevice> dev);
 
-    bool init();
+    bool init(int8_t instance_number);
     void timer();
 
     // check sensor ID
@@ -119,9 +119,9 @@ private:
     bool set_timing_budget(uint32_t budget_ms) WARN_IF_UNUSED;
     bool start_continuous() WARN_IF_UNUSED;
     bool set_inter_measurement(uint32_t period_ms) WARN_IF_UNUSED;
-    uint32_t calcMacroPeriod(uint16_t osc_freq) const;
-    bool setupManualCalibration(void);
+    uint32_t calc_macro_period(uint16_t osc_freq) const;
     bool interrupt_polarity(uint8_t *value);
+    bool set_address(uint8_t new_address);
     bool wait_for_boot(void);
 };
 
